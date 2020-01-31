@@ -104,9 +104,18 @@ class MyTreeCtrl(CustomTreeCtrl):
        self._data=dict()
        self._wx_init(**kwargs)
        
+       self.root_name="jumeg"
+       
        self._info=dict()
        self._used_dict=dict()
        
+   def update(self,data=None,root=None,item_data=None):
+      self._clear()
+      if item_data==None:
+         item_data=dict()
+      if root:
+         self.root_name=root
+      self._wx_init(data=data,root=self.root_name,item_data=item_data)
        
    def sort(self,keys):
        
@@ -181,7 +190,11 @@ class MyTreeCtrl(CustomTreeCtrl):
            
            
        return item_data
-       
+   
+   def _clear(self):
+      self.DeleteAllItems()
+      self._data=None
+    
    def _init_tree_ctrl(self,data=None,root=None,item_data=None):
        if data==None:
            logger.exception("data is None")
@@ -379,6 +392,7 @@ class CtrlPanel(wx.Panel):
 
         #--- init show button
         #fehlerhaft show button
+        self._bt_open = wx.Button(self,label="Open",name=self.GetName()+".BT.OPEN")
         self._bt_info  = wx.Button(self,label="Show", name=self.GetName()+".BT.SHOW")
         self._bt_save  = wx.Button(self,label="Save", name=self.GetName()+".BT.SAVE")
         self._bt_update =wx.Button(self,label="Update", name=self.GetName()+".BT.UPDATE")
@@ -413,6 +427,7 @@ class CtrlPanel(wx.Panel):
         hbox.Add(self._bt_info,0,LEA,2)
         vbox.Add(hbox,0,LEA,2)
         hbox.Add(self._bt_save,0,LEA,2)
+        hbox.Add(self._bt_open,0,LEA,2)
       
         self.SetAutoLayout(True)
         self.SetSizer(vbox)
@@ -436,6 +451,33 @@ class CtrlPanel(wx.Panel):
                  self.cfg.save_cfg(fname=pathname,data=data)
              except IOError:
                  wx.LogError("Cannot save current data in file '%s'." % pathname)
+                 
+    def OnOpen(self, event=None):
+
+                                                                                             
+       # otherwise ask the user what new file to open
+       with wx.FileDialog(self, "Open yaml file", wildcard="yaml files (*.yaml)|*.yaml",
+                          style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as fileDialog:
+           
+           #fileDialog.SetDirectory(os.path.dirname(self.cfg.filename))
+           if fileDialog.ShowModal() == wx.ID_CANCEL:
+               return     # the user changed their mind
+   
+           # Proceed loading the file chosen by the user
+           pathname = fileDialog.GetPath()
+           try:
+              if os.path.isfile(pathname):
+                  if wx.MessageBox("Do you want to save?", "Please confirm",
+                            wx.ICON_QUESTION | wx.YES_NO, self) == wx.YES:
+                     self._CfgTreeCtrl.update_info()
+                     self._CfgTreeCtrl.update_used_dict()
+                     self.OnSaveAs()
+                  #self._CFG.load_cfg(fname=pathname)
+                  #self._CFG.update(config=pathname)
+                  return pathname
+           except IOError:
+               wx.LogError("Cannot open file '%s'." % pathname)
+           return None
     
     def ClickOnButton(self,evt):
         obj = evt.GetEventObject()
@@ -459,6 +501,14 @@ class CtrlPanel(wx.Panel):
         elif obj.GetName().endswith(".BT.UPDATE"):
             print("updated")
             self._CfgTreeCtrl.update_used_dict()
+        elif obj.GetName().endswith(".BT.OPEN"):
+           fCfg=self.OnOpen()
+           if fCfg:
+              self._CFG.update(config=fCfg)
+              print("\n"*5)
+              print(fCfg)
+              print(self._CFG.GetDataDict())
+              self._CfgTreeCtrl.update(data=self.cfg.GetDataDict())
         else:
             evt.Skip()
 
