@@ -5,7 +5,7 @@
 """
 
 #--------------------------------------------
-# Authors: Frank Boers <f.boers@fz-juelich.de> 
+# Authors: Frank Boers <f.boers@fz-juelich.de>, Lukas Kurth <l.kurth@fz-juelich.de>
 #
 #-------------------------------------------- 
 # Date: 08.10.19
@@ -27,17 +27,25 @@ from jumeg.base            import jumeg_logger
 import datetime
 import getpass
 from copy import copy
-from ruamel.yaml import YAML
+try:
+   from ruamel.yaml import YAML
+except:
+   import yaml
+   
+import json
 
 logger = logging.getLogger("jumeg")
 
-__version__= "2019.10.08.001"
+__version__= datetime.datetime.now()
 
 class _Struct:
     def __init__(self, **entries):
         self.__dict__.update(entries)
 
 class dict2obj(dict):
+    '''
+    parses a dict to a Python Object
+    '''
     def __init__(self, dict_):
         super(dict2obj, self).__init__(dict_)
         for key in self:
@@ -85,6 +93,7 @@ class JuMEG_CONFIG_Info():
             self._param["date"]=date
         
     def reload_date(self):
+        '''returns the actual date and time'''
         now=datetime.datetime.now()
         dt=now.strftime('%Y-%m-%d')+" "+now.strftime('%H:%M')
         return dt
@@ -101,7 +110,8 @@ class JuMEG_CONFIG_Info():
         return self._param[key]
     
     def _set_param(self,key,value):
-        self._param[key]=value
+       if key in self._param.keys():
+          self._param[key]=value
         
     @property
     def user(self): return self._get_param("user")
@@ -125,8 +135,8 @@ class JuMEG_CONFIG_Info():
     def comments(self,v): self._set_param("comments",v)
         
         
-class JuMEG_CONFIG_YAML_BASE(object):
-    """
+class JuMEG_CONFIG(object):
+    '''
     load or get yaml config as dict
     convert to object
     
@@ -134,7 +144,7 @@ class JuMEG_CONFIG_YAML_BASE(object):
     --------
      cfg["test"] => cfg.test
      cfg["test"]["A"] => cfg.test.A
-    """
+    '''
     def __init__(self,**kwargs):
         self._fname = None
         self._data  = None
@@ -144,6 +154,13 @@ class JuMEG_CONFIG_YAML_BASE(object):
     
     @property
     def data(self): return self._data
+    
+    @property
+    def fname(self): return self._fname
+    
+    @fname.setter
+    def fname(self,v):
+       self._fname=jb.expandvars(v)
    
     @property
     def filename(self): return self._fname
@@ -152,41 +169,57 @@ class JuMEG_CONFIG_YAML_BASE(object):
         pass
     
     def info(self):
-        """print config dict"""
-        #logger.info("info")
+        '''prints first opened config dict(not the changed one)'''
+        self.update()
         logger.info("---> config file: {}\n{}/n".format(self.filename,pprint.pformat(self._cfg,indent=4)))
-        #logger.info("---> config file: {}\n{}/n".format(self.filename,yaml.dump(self._cfg,indent=4)))
-    #def GetData(self,key=None):
-    #    if key:
-    #        return self._cfg.et(key)
-    #    return self._cfg
     
     def GetDataDict(self,key=None):
+        '''
+        returns the dict or one element of the dict
+        :param key: key of the returned part
+        :type key: str
+        '''
         if key:
            return self._cfg.get(key)
         return self._cfg
     
-    def _init(self,**kwargs):
-        pass
-    
     def load_cfg(self,fname=None,key=None):
+        '''
+        returns the data extracted from a .yaml config file
+        :param fname: filename
+        :type fname: str
+        :param key: key of the returned part
+        :type key: str
+        '''
         if fname:
-           self._fname = jb.expandvars(fname)
-        with open(self._fname) as f:
-            self._cfg = self._yaml.load(f)
-            if key:
-                self._cfg = self._cfg.get(key)
-            self._data = Struct( self._cfg )
-            
+           self.fname = fname
+        if not self.fname:
+           return None
+        if not os.path.isfile(self.fname):
+           return None
+        
+        with open(self.fname) as f:
+            if fname.endswith(".yaml"):
+               self._cfg = self._yaml.load(f)
+               if key:
+                   self._cfg = self._cfg.get(key)
+               self._data = Struct( self._cfg )
+            elif fname.endswith(".json"):
+               self._cfg = json.load(f)
+               if key:
+                  self._cfg = self._cfg.get(key)
+               self._data = Struct(self._cfg)
+        
         return self._data
     
     def update(self,**kwargs):
-        """
+        '''
         update config obj
         :param config: config dict or filename
+        :type config: dict or str
         :param key: if <key> use part of config e.g.: config.get(key)
-        :return:
-        """
+        :type key: str
+        '''
         self._cfg = kwargs.get("config",None)
         key = kwargs.get("key",None)
         
@@ -196,12 +229,16 @@ class JuMEG_CONFIG_YAML_BASE(object):
            self._data  = Struct(self._cfg)
            self._fname = None
         else:
-           self.load_cfg(fname=self._cfg,key=key)
-           
+           return self.load_cfg(fname=self._cfg,key=key)
            
     def save_cfg(self,fname=None,data=None):
-         """
-         """
+         '''
+         saves the data into the file with the filename fname or saves into a new file with filename fname
+         :param fname: the filename the data will be saved in
+         :type fname: str
+         :param data: the data which will be written into the file
+         :type data: dict
+         '''
          if data:
             self._cfg=data
          if fname:
@@ -212,10 +249,5 @@ class JuMEG_CONFIG_YAML_BASE(object):
 if __name__=='__main__':
     from jumeg.base.jumeg_logger import setup_script_logging
     logger=setup_script_logging(logger=logger,name="jumeg",opt=None)
-    print('test:')
     info=JuMEG_CONFIG_Info(version=__version__)
     info.printInfo()
-    print(info.get_param())
-    """cfg=JuMEG_CONFIG_YAML_BASE()
-    cfg.update(config="./test_config.yaml")
-    cfg.info()"""

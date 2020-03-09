@@ -1,0 +1,4 @@
+global:
+    experiment: INTEXT
+noise_reducer:
+    test: 5
